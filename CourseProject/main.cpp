@@ -1,129 +1,117 @@
-/*# -----------------------------------------------------------------------------
-# Manuel Lage Cañellas (CMVS - University of Oulu).
-# Multiprocessor programming course 2024
-#
-# -----------------------------------------------------------------------------
-*/
 
-/*
-Example of where you can find your OpenCL based on your SDK
-NVIDIA Linux
-Linker:     /usr/local/cuda-11.6/lib64/libOpenCL.so
-Directory:  /usr/local/cuda-11.6/include
-
-NVIDIA Windows
-Linker:     Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\lib\x64\OpenCl.lib
-Directory:  Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\include
-
-Intel CPU Linux
-Linker:      /opt/intel/system_studio_2020/opencl/SDK/lib64/libOpenCl.so
-Directory:   opt/intel/system_studio_2020/opencl/SDK/include
-
-Intel Graphics Linux
-install intel-opencl-icd
-
-*/
-
+//Todo: 
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
+#define _CRT_SECURE_NO_DEPRECATE
+#include <CL/cl.h>
 #include <stdio.h>
+#include <windows.h>
 #include <stdlib.h>
 
-//Depending of your installation more includes should be uses, check your particular SDK installation
-//
-#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
-#include <CL/cl.h>
+#define MATRIXSIZE 100
 
 
-//This is a kernel, a piece of code intended to be executed in a GPU or CPU
-const char* kernel_source =
-"__kernel void hello(__global char *output) {"
-"output[0]='h';"
-"output[1]='e';"
-"output[2]='l';"
-"output[3]='l';"
-"output[4]='o';"
-"output[5]=',';"
-"output[6]=' ';"
-"output[7]='w';"
-"output[8]='o';"
-"output[9]='r';"
-"output[10]='l';"
-"output[11]='d';"
-"output[12]='\\0';"
-"}";
+static void display() {
 
-//The rest of the code is intended to be executed in the host
-int main()
-{
-    cl_int           err;
-    cl_uint          num_platforms;
-    cl_platform_id* platforms;
-    cl_device_id     device;
-    cl_context       context;
-    cl_command_queue queue;
-    cl_program       program;
-    cl_kernel        kernel;
-    cl_mem           output;
+	cl_platform_id platform;
+	cl_int status = clGetPlatformIDs(1, &platform, NULL);
 
-    char result[13];
+	if (status != CL_SUCCESS) {
+		printf("Error: Failed to get platform information!");
+		return;
+	}
 
-    // PLATFORM
-    // In this example we will only consider one platform
-    //
-    int num_max_platforms = 1;
-    err = clGetPlatformIDs(num_max_platforms, NULL, &num_platforms);
-    printf("Num platforms detected: %d\n", num_platforms);
+	char buffer[1024];
+	clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(buffer), buffer, NULL);
+	printf("Platform name: %s\n", buffer);
 
-    platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
-    err = clGetPlatformIDs(num_max_platforms, platforms, &num_platforms);
-
-    if (num_platforms < 1)
-    {
-        printf("No platform detected, exit\n");
-        exit(1);
-    }
-
-    //DEVICE (could be CL_DEVICE_TYPE_GPU)
-    //
-    err = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, 1, &device, NULL);
-
-    //CONTEXT
-    //
-    context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-
-    //QUEUE
-    //
-    queue = clCreateCommandQueue(context, device, 0, &err);
-
-    //READ KERNEL AND COMPILE IT
-    //
-    program = clCreateProgramWithSource(context, 1, &kernel_source, NULL, &err);
-    err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-
-
-    //CREATE KERNEL AND KERNEL PARAMETERS
-    //
-    kernel = clCreateKernel(program, "hello", &err);
-    output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 13 * sizeof(char), NULL, &err);
-    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &output);
-
-    //EXECUTE KERNEL!
-    //
-    err = clEnqueueTask(queue, kernel, 0, NULL, NULL);
-
-    //READ KERNEL OUTPUT
-    //
-    err = clEnqueueReadBuffer(queue, output, CL_TRUE, 0, 13 * sizeof(char), result, 0, NULL, NULL);
-    printf("***%s***", result);
-
-
-    //Free your memory please....
-    clReleaseMemObject(output);
-    clReleaseKernel(kernel);
-    clReleaseProgram(program);
-    clReleaseCommandQueue(queue);
-    clReleaseContext(context);
-    free(platforms);
-
-
-    return 0;
+	clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(buffer), buffer, NULL);
+	printf("Platform version: %s\n", buffer);
 }
+
+void matrix_add(float *matrix_1, float *matrix_2, float *result, int matrixsize) {
+	for (int i = 0; i < matrixsize * matrixsize; i++) {
+		result[i] = matrix_1[i] + matrix_2[i];
+	}
+}
+
+double getTime() {
+	LARGE_INTEGER frequency, counter;
+	QueryPerformanceFrequency(&frequency);
+	QueryPerformanceCounter(&counter);
+	return (double)counter.QuadPart / (double)frequency.QuadPart;
+}
+
+int main() {
+
+	cl_platform_id platform;
+	cl_device_id device;
+	cl_context context;
+	cl_command_queue command_queue;
+	cl_program program;
+	cl_kernel kernel;
+	cl_mem buffer_matrix_1, buffer_matrix_2, buffer_result;
+	cl_int err;
+
+	display();
+
+	int size = MATRIXSIZE * MATRIXSIZE;
+
+	float *matrix_1 = (float *)malloc(size * sizeof(float));
+	float *matrix_2 = (float *)malloc(size * sizeof(float));
+	float *result = (float *)malloc(size * sizeof(float));
+
+	for (int i = 0; i < size; i++) {
+		matrix_1[i] = (float)i;
+		matrix_2[i] = (float)(i * 2);
+	}
+
+	clGetPlatformIDs(1, &platform, NULL);
+	clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+
+	context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+	command_queue = clCreateCommandQueue(context, device, 0, &err);
+
+	buffer_matrix_1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_1, NULL);
+	buffer_matrix_2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_2, NULL);
+	buffer_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, size * sizeof(float), NULL, NULL);
+
+	// Load and compile the kernel
+	const char *kernelSource = "__kernel void matrix_add(__global const float *matrix_1, __global const float *matrix_2, __global float *result) { int id = get_global_id(0); result[id] = matrix_1[id] + matrix_2[id]; }";
+	program = clCreateProgramWithSource(context, 1, &kernelSource, NULL, &err);
+	clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+	kernel = clCreateKernel(program, "matrix_add", &err);
+
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer_matrix_1);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &buffer_matrix_2);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &buffer_result);
+
+	size_t globalSize = size;
+	double start_time = getTime();
+	clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &globalSize, NULL, 0, NULL, NULL);
+	double end_time = getTime();
+	
+	printf("Host execution time: %f seconds\n", end_time - start_time);
+
+	clEnqueueReadBuffer(command_queue, buffer_result, CL_TRUE, 0, size * sizeof(float), result, 0, NULL, NULL);
+
+	for (int i = 0; i < 10; i++) {
+		printf("%f", result[i]);
+	}
+	printf("\n");
+
+	clReleaseMemObject(buffer_matrix_1);
+	clReleaseMemObject(buffer_matrix_2);
+	clReleaseMemObject(buffer_result);
+	clReleaseKernel(kernel);
+	clReleaseProgram(program);
+	clReleaseCommandQueue(command_queue);
+	clReleaseContext(context);
+	free(matrix_1);
+	free(matrix_2);
+	free(result);
+
+	
+	return 0;
+}
+
+
