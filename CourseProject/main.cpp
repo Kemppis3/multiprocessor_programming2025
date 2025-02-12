@@ -1,7 +1,6 @@
 
 //Todo: 
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
-#define _CRT_SECURE_NO_DEPRECATE
 #include <CL/cl.h>
 #include <stdio.h>
 #include <windows.h>
@@ -43,13 +42,6 @@ double getTime() {
 
 int main() {
 
-	cl_platform_id platform;
-	cl_device_id device;
-	cl_context context;
-	cl_command_queue command_queue;
-	cl_program program;
-	cl_kernel kernel;
-	cl_mem buffer_matrix_1, buffer_matrix_2, buffer_result;
 	cl_int err;
 
 	display();
@@ -65,21 +57,22 @@ int main() {
 		matrix_2[i] = (float)(i * 2);
 	}
 
+	cl_platform_id platform;
+	cl_device_id device;
 	clGetPlatformIDs(1, &platform, NULL);
 	clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
 
-	context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-	command_queue = clCreateCommandQueue(context, device, 0, &err);
+	cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+	cl_command_queue command_queue = clCreateCommandQueue(context, device, 0, &err);
 
-	buffer_matrix_1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_1, NULL);
-	buffer_matrix_2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_2, NULL);
-	buffer_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, size * sizeof(float), NULL, NULL);
+	cl_mem buffer_matrix_1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_1, NULL);
+	cl_mem buffer_matrix_2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_2, NULL);
+	cl_mem buffer_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, size * sizeof(float), NULL, NULL);
 
-	// Load and compile the kernel
 	const char *kernelSource = "__kernel void matrix_add(__global const float *matrix_1, __global const float *matrix_2, __global float *result) { int id = get_global_id(0); result[id] = matrix_1[id] + matrix_2[id]; }";
-	program = clCreateProgramWithSource(context, 1, &kernelSource, NULL, &err);
+	cl_program program = clCreateProgramWithSource(context, 1, &kernelSource, NULL, &err);
 	clBuildProgram(program, 1, &device, NULL, NULL, NULL);
-	kernel = clCreateKernel(program, "matrix_add", &err);
+	cl_kernel kernel = clCreateKernel(program, "matrix_add", &err);
 
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer_matrix_1);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &buffer_matrix_2);
