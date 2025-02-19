@@ -5,7 +5,9 @@
 #include <stdio.h>
 #include <windows.h>
 #include <stdlib.h>
-
+#include "lodepng.h"
+#include <iostream>
+#include <vector>
 #define MATRIXSIZE 100
 
 
@@ -40,69 +42,53 @@ double getTime() {
 	return (double)counter.QuadPart / (double)frequency.QuadPart;
 }
 
+unsigned int processingImage(const char* filename, const char* outputName) {
+
+	std::vector<unsigned char> image;
+	unsigned width, height;
+
+	unsigned error = lodepng::decode(image, width, height, filename);
+
+	if (error) {
+		std::cout << "decoder error" << lodepng_error_text(error) << std::endl;
+		return error;
+	}
+
+	std::cout << "Original Size: " << width << "x" << height << std::endl;
+	unsigned newWidth = width / 4;
+	unsigned newHeight = height / 4;
+	std::vector<unsigned char> resizedImage(newWidth * newHeight * 4);
+
+	for (unsigned y = 0; y < newHeight; ++y) {
+		for (unsigned x = 0; x < newWidth; ++x) {
+			unsigned originalX = x * 4;
+			unsigned originalY = y * 4;
+			unsigned originalIndex = (originalY * width + originalX) * 4;
+			unsigned newIndex = (y * newWidth + x) * 4;
+
+			resizedImage[newIndex] = image[originalIndex];
+			resizedImage[newIndex + 1] = image[originalIndex + 1];
+			resizedImage[newIndex + 2] = image[originalIndex + 2];
+			resizedImage[newIndex + 3] = image[originalIndex + 3];
+		}
+	}
+
+	error = lodepng::encode(outputName, resizedImage, newWidth, newHeight);
+	if (error) {
+		std::cout << "Error saving image" << lodepng_error_text(error) << std::endl;
+		return error;
+	}
+	std::cout << "Resized image saved to " << outputName << " (" << newWidth << "x" << newHeight << ")" << std::endl;
+	return 0;
+}
+
+unsigned int grayScale(const char* original, const char* resized) {
+
+}
+
 int main() {
 
-	cl_int err;
-
-	display();
-
-	int size = MATRIXSIZE * MATRIXSIZE;
-
-	float *matrix_1 = (float *)malloc(size * sizeof(float));
-	float *matrix_2 = (float *)malloc(size * sizeof(float));
-	float *result = (float *)malloc(size * sizeof(float));
-
-	for (int i = 0; i < size; i++) {
-		matrix_1[i] = (float)i;
-		matrix_2[i] = (float)(i * 2);
-	}
-
-	cl_platform_id platform;
-	cl_device_id device;
-	clGetPlatformIDs(1, &platform, NULL);
-	clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-
-	cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-	cl_command_queue command_queue = clCreateCommandQueue(context, device, 0, &err);
-
-	cl_mem buffer_matrix_1 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_1, NULL);
-	cl_mem buffer_matrix_2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size * sizeof(float), matrix_2, NULL);
-	cl_mem buffer_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, size * sizeof(float), NULL, NULL);
-
-	const char *kernelSource = "__kernel void matrix_add(__global const float *matrix_1, __global const float *matrix_2, __global float *result) { int id = get_global_id(0); result[id] = matrix_1[id] + matrix_2[id]; }";
-	cl_program program = clCreateProgramWithSource(context, 1, &kernelSource, NULL, &err);
-	clBuildProgram(program, 1, &device, NULL, NULL, NULL);
-	cl_kernel kernel = clCreateKernel(program, "matrix_add", &err);
-
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer_matrix_1);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &buffer_matrix_2);
-	clSetKernelArg(kernel, 2, sizeof(cl_mem), &buffer_result);
-
-	size_t globalSize = size;
-	double start_time = getTime();
-	clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &globalSize, NULL, 0, NULL, NULL);
-	double end_time = getTime();
-	
-	printf("Host execution time: %f seconds\n", end_time - start_time);
-
-	clEnqueueReadBuffer(command_queue, buffer_result, CL_TRUE, 0, size * sizeof(float), result, 0, NULL, NULL);
-
-	for (int i = 0; i < 10; i++) {
-		printf("%f", result[i]);
-	}
-	printf("\n");
-
-	clReleaseMemObject(buffer_matrix_1);
-	clReleaseMemObject(buffer_matrix_2);
-	clReleaseMemObject(buffer_result);
-	clReleaseKernel(kernel);
-	clReleaseProgram(program);
-	clReleaseCommandQueue(command_queue);
-	clReleaseContext(context);
-	free(matrix_1);
-	free(matrix_2);
-	free(result);
-
+	processingImage("test.png", "result.png");
 	
 	return 0;
 }
