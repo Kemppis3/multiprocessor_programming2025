@@ -2,7 +2,10 @@
 #include "lodepng.h"
 #include <iostream>
 
-ImageData::~ImageData() {};
+ImageData::~ImageData() {
+	width = 0;
+	height = 0;
+};
 
 ImageData::ImageData() {};
 
@@ -41,15 +44,15 @@ ImageData::ImageData(unsigned char* imptr, unsigned w, unsigned h) {
 	std::cout << "ImageData created from char pointer" << std::endl;
 }
 
-std::vector<unsigned char> ImageData::getImage() {
+std::vector<unsigned char> & ImageData::getImage() {
     return imageVector;
 }
 
-unsigned int ImageData::getHeight() {
+unsigned int & ImageData::getHeight() {
     return height;
 }
 
-unsigned int ImageData::getWidth() {
+unsigned int & ImageData::getWidth() {
     return width;
 }
 
@@ -76,7 +79,7 @@ void ImageData::ResizeImage() {
 		}
 	}
 
-	std::cout << "Image rescaled to size: " << "(" << newWidth << "x" << newHeight << ") " << "Image rescaling time = " << std::endl;
+	std::cout << "Image rescaled to size: " << "(" << newWidth << "x" << newHeight << ") " << std::endl;
 
     imageVector = resizedImage;
     height = newHeight;

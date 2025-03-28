@@ -28,9 +28,9 @@ class ImageData {
         int WriteImageToFile(const char* filename);
 
         //Get
-        std::vector<unsigned char> getImage();
-        unsigned int getHeight();
-        unsigned int getWidth();
+        std::vector<unsigned char> & getImage();
+        unsigned int & getHeight();
+        unsigned int & getWidth();
 
         //Image processing functions:
 
@@ -48,6 +48,7 @@ class ImageData {
 
         //Converts char pointer to ImageData object
         ImageData CharPointerToImageData(unsigned char* imptr, unsigned width, unsigned height);
+
 
 
     private:
