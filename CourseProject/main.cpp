@@ -79,30 +79,35 @@ std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> image1, std::vect
 	unsigned int index2;
 
 	//Current disparity ZNCC value and best ZNCC value
-	float current;
-	float best;
+	float current_val;
+	float best_val;
 
 	//Best disparity
 	float best_d;
 
-	std::vector<unsigned char> output = image1;
+	//Border calculation
+	int validPixels;
+
+	std::vector<unsigned char> output;
+	output.resize(image1.size());
 
 	for(int y = 0; y<imageHeight; y++) {
 
 		for(int x = 0; x<imageWidth; x++) {
 
 			best_d = max_disp;
-			best = -1;
+			best_val = -1;
 
 			for(int d = 0; d < max_disp; d++) {
 
-				mean1 = 0;
-				mean2 = 0;
+				mean1 = 0.0;
+				mean2 = 0.0;
+				validPixels = 0;
 
 				for (int ky = 0; ky < windowHeight; ky++) {
 					for (int kx = 0; kx < windowWidth; kx++) {
 
-						if (y+ky < 0 || y+ky > imageHeight || x+kx < 0 || x+kx > imageWidth || x+kx-d < 0 || x+kx-d > imageWidth) {
+						if (y+ky >= imageHeight || x+kx >= imageWidth || x+kx-d < 0) {
 							continue;
 						}
 
@@ -111,20 +116,24 @@ std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> image1, std::vect
 
 						mean1 += image1[index1];
 						mean2 += image2[index2];
+						validPixels++;
+
 					}
 				}
 
-				mean1 /= (windowHeight*windowWidth);
-				mean2 /= (windowHeight*windowWidth);
+				if(validPixels > 0) {
+					mean1 /= validPixels;
+					mean2 /= validPixels;
+				}
 
-				std1 = 0;
-				std2 = 0;
-				current = 0;
+				std1 = 0.0;
+				std2 = 0.0;
+				current_val = 0.0;
 
 				for(int ky = 0; ky < windowHeight; ky++) {
 					for(int kx = 0; kx < windowWidth; kx++) {
 
-						if (y+ky < 0 || y+ky > imageHeight || x+kx < 0 || x+kx > imageWidth || x+kx-d < 0 || x+kx-d > imageWidth) {
+						if (y+ky >= imageHeight || x+kx >= imageWidth || x+kx-d < 0) {
 							continue;
 						}
 
@@ -133,25 +142,30 @@ std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> image1, std::vect
 
 						std1 += (image1[index1] - mean1) * (image1[index1] - mean1);
 						std2 += (image2[index2] - mean2) * (image2[index2] - mean2);
-						current += (image1[index1] - mean1) * (image2[index2] - mean2);
+						current_val += (image1[index1] - mean1) * (image2[index2] - mean2);
 						
 					}
 				}
-				current /= std::sqrt(std1)*std::sqrt(std2);
 
-				if(current > best) {
-					best = current;
+				if(std1 > 0 && std2 > 0) {
+					current_val /= std::sqrt(std1)*std::sqrt(std2);
+				}
+				
+
+				if(current_val > best_val) {
+					best_val = current_val;
 					best_d = d;
 				}
 			}
 
 			index1 = (y*imageWidth+x)*4;
 
-			best_d = std::round((best_d*255.0) / static_cast<float>(max_disp));
+			best_d = std::round((best_d/max_disp)*255.0);
 
 			output[index1] = best_d;
 			output[index1+1] = best_d;
 			output[index1+2] = best_d;
+			output[index1+3] = 255;
 		}
 	}
 
@@ -177,6 +191,18 @@ std::vector<unsigned char> CrossCheck(std::vector<unsigned char> map1, std::vect
 	return outputMap;
 }
 
+
+/* std::vector<unsigned char> OcculsionFill(std::vector<unsigned char> map) {
+
+	for(int i = 0; i < map.size(); i++) {
+
+		if(map[i] == 0){
+
+		} 
+	}
+
+}
+ */
 int main() {
 
 	ImageData image1("im0.png");
@@ -189,11 +215,11 @@ int main() {
 	image2.ImageToGrayscale();
 
 	std::vector<unsigned char> map1 = CalcZNCC(image1.getImage(), image2.getImage(), image1.getWidth(), image1.getHeight(), 9, 9, 260);
-	std::vector<unsigned char> map2 = CalcZNCC(image2.getImage(), image1.getImage(), image1.getWidth(), image1.getHeight(), 9, 9, 260);
+	//std::vector<unsigned char> map2 = CalcZNCC(image2.getImage(), image1.getImage(), image1.getWidth(), image1.getHeight(), 9, 9, 260);
 
-	std::vector<unsigned char> mapOut = CrossCheck(map1, map2, 8);
+	//std::vector<unsigned char> mapOut = CrossCheck(map1, map2, 8);
 
-	ImageData outImage(mapOut, image1.getWidth(), image1.getHeight());
+	ImageData outImage(map1, image1.getWidth(), image1.getHeight());
 	outImage.WriteImageToFile("output.png");
 
 	return 0;
