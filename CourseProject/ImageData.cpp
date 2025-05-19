@@ -5,6 +5,7 @@
 ImageData::~ImageData() {
 	width = 0;
 	height = 0;
+	imageVector.clear();
 };
 
 ImageData::ImageData() {};
@@ -167,7 +168,7 @@ unsigned char* ImageData::ImageDataToCharPointer() {
 	
 	memcpy(imptr, imdata.data(), size);
 
-	std::cout << "Image converted to unsigned char pointer!";
+	std::cout << "Image converted to unsigned char pointer!" << std::endl;
 
 	return imptr;
 }
