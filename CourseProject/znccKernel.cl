@@ -1,4 +1,4 @@
-double CalcMean(__global unsigned char* image, int x, int y, int width, int height, int windowSize, int d) {
+double CalcMean(__global unsigned char* image, int x, int y, unsigned width, unsigned height, int windowSize, unsigned d) {
 
     int halfWindow = windowSize/2;
     double result = 0.0;
@@ -24,16 +24,19 @@ double CalcMean(__global unsigned char* image, int x, int y, int width, int heig
 }
 
 
-double CalcZNCC(__global unsigned char * image1, __global unsigned char * image2, int x, int y, int width, int height, int windowSize, int d) {
+double CalcZNCC(__global unsigned char * image1, __global unsigned char * image2, int x, int y, unsigned width, unsigned height, int windowSize, unsigned d) {
 
     int halfWindow = windowSize/2;
-    double result = 0;
+    double result = 0.0;
+
     int index1;
     int index2;
-    double mean1;
-    double mean2;
-    double std1;
-    double std2;
+
+    double std1 = 0.0;
+    double std2 = 0.0;
+
+    double mean1 = CalcMean(image1, x, y, width, height, windowSize, 0);
+    double mean2 = CalcMean(image2, x, y, width, height, windowSize, d);
 
     for(int dy = -halfWindow; dy < halfWindow; dy++) {
 
@@ -44,9 +47,6 @@ double CalcZNCC(__global unsigned char * image1, __global unsigned char * image2
             index1 = ((y+dy)*width+(x+dx))*4;
             index2 = ((y+dy)*width+(x+dx-d))*4;
 
-            mean1 = CalcMean(image1, x, y, width, height, windowSize, 0);
-            mean2 = CalcMean(image2, x, y, width, height, windowSize, d);
-
             std1 += (image1[index1] - mean1) * (image1[index1] - mean1);
             std2 += (image2[index2] - mean2) * (image2[index2] - mean2);
             result += (image1[index1] - mean1) * (image2[index2] - mean2);
@@ -55,25 +55,23 @@ double CalcZNCC(__global unsigned char * image1, __global unsigned char * image2
 
     if(std1 != 0 && std2 != 0) {
         result /= sqrt(std1)*sqrt(std2);
+    } else {
+        result = 0.0;
     }
 
     return result;
 }
 
 
-__kernel void ZNCCKernel(__global unsigned char* image1, __global unsigned char* image2, global unsigned char* outputImage, int width, int height, int windowSize, int max_disp) {
+__kernel void ZNCCKernel(__global unsigned char* image1, __global unsigned char* image2, global unsigned char* outputImage, unsigned width, unsigned height, unsigned windowSize, unsigned max_disp) {
 
     int x = get_global_id(0);
     int y = get_global_id(1);
 
-    double best_val;
-    double best_d;
-
-    double mean1 = CalcMean(image1, x, y, width, height, windowSize, 0);
+    double best_val = -1;
+    double best_d = max_disp;
 
     for(int d = 0; d < max_disp; d++) {
-
-        double mean2 = CalcMean(image2, x, y, width, height, windowSize, d);
 
         double zncc_val = CalcZNCC(image1, image2, x, y, width, height, windowSize, d);
         
@@ -92,9 +90,4 @@ __kernel void ZNCCKernel(__global unsigned char* image1, __global unsigned char*
 	outputImage[index+1] = best_d;
 	outputImage[index+2] = best_d;
 	outputImage[index+3] = 255;
-
-}
-
-__kernel void ProcessImage(__global unsigned char* image, __global unsigned char* output, const unsigned width, const unsigned height) {
-
 }
