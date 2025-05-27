@@ -737,7 +737,71 @@ unsigned char * executeXCheckKernel(unsigned char * map1, unsigned char * map2, 
 	return outputMap;
 }
 
+unsigned char * executeOccFillKernel(unsigned char * map, unsigned width, unsigned height) {
+
+	auto start = std::chrono::high_resolution_clock::now();
+	unsigned char* outputMap = new unsigned char[width*height*4];
+
+    // Initialize OpenCL
+    cl_platform_id platform;
+    clGetPlatformIDs(1, &platform, NULL);
+    
+    cl_device_id device;
+    clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+
+    cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, NULL);
+    cl_command_queue queue = clCreateCommandQueue(context, device, 0, NULL);
+
+    // Create buffers
+    cl_mem buffer_in = clCreateBuffer(context, CL_MEM_READ_ONLY, width*height*4, NULL, NULL);
+	cl_mem buffer_out = clCreateBuffer(context, CL_MEM_WRITE_ONLY, width*height*4, NULL, NULL);
+
+    // Copy data to the device
+    clEnqueueWriteBuffer(queue, buffer_in, CL_TRUE, 0, width*height*4, map, 0, NULL, NULL);
+
+    // Load and compile the kernel
+	std::string sourceString = loadKernelFromFile("OccFillKernel.cl");
+    const char *source = sourceString.c_str();
+	
+    cl_program program = clCreateProgramWithSource(context, 1, &source, NULL, NULL);
+    clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+    
+    cl_kernel kernel = clCreateKernel(program, "OcculsionFill", NULL);
+
+    // Set kernel arguments
+    clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer_in);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &buffer_out);
+    clSetKernelArg(kernel, 2, sizeof(unsigned), &width);
+    clSetKernelArg(kernel, 3, sizeof(unsigned), &height);
+
+    // Execute the kernel
+	size_t global_work_size[2] = {width, height};
+
+    clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size, NULL, 0, NULL, NULL);
+
+    // Read results back to the host
+    clEnqueueReadBuffer(queue, buffer_out, CL_TRUE, 0, width*height*4, outputMap, 0, NULL, NULL);
+
+    // Cleanup
+    clReleaseMemObject(buffer_in);
+	clReleaseMemObject(buffer_out);
+    clReleaseKernel(kernel);
+    clReleaseProgram(program);
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+
+	auto end = std::chrono::high_resolution_clock::now();
+	opTime = end-start;
+
+	std::cout << "Cross check execution time: " << opTime.count() << "s" << std::endl;
+
+	return outputMap;
+}
+
+
 int main() {
+
+    //Main for openCL
 
 	ImageData inputImage1("im0.png");
 	ImageData inputImage2("im1.png");
@@ -760,25 +824,24 @@ int main() {
 	unsigned char * map1 = executeZNCCKernel(outptr1, outptr2, width/4, height/4, 9, 260);
     unsigned char * map2 = executeZNCCKernel(outptr2, outptr1, width/4, height/4, 9, 260);
 
-    //unsigned char * outputMap = executeXCheckKernel(map1, map2, width/4, height/4, 8);
+    unsigned char * XcheckMap = executeXCheckKernel(map1, map2, width/4, height/4, 8);
 
-    //Occulsion fill here
+    unsigned char * result = executeOccFillKernel(XcheckMap, width/4, height/4);
 
-	ImageData out(map1, width/4, height/4);
+	ImageData out(result, width/4, height/4);
 	out.WriteImageToFile("zncc_output.png");
-
 
 	delete[] outptr1;
 	delete[] outptr2;
 	delete[] inptr1;
 	delete[] inptr2;
+    delete[] map1;
+    delete[] map2;
+    delete[] XcheckMap;
+    delete[] result;
 
     return 0;
 }
-
-
-
-
 
 
 /* int main() {
@@ -797,13 +860,13 @@ int main() {
 
 	std::vector<unsigned char> mapX = CrossCheck(map1, map2, 8);
 
-	//std::vector<unsigned char> mapOut = OcclusionFillMultithreaded(mapX, image1.getWidth(), image1.getHeight());
+	std::vector<unsigned char> mapOut = OcclusionFillMultithreaded(mapX, image1.getWidth(), image1.getHeight());
 
-	ImageData outImage(mapX, image1.getWidth(), image1.getHeight());
+	ImageData outImage(mapOut, image1.getWidth(), image1.getHeight());
 
 	outImage.WriteImageToFile("output.png");
 
 	return 0;
-}  */
+} */
 
 
