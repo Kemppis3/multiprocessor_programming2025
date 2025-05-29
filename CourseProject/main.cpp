@@ -1,4 +1,3 @@
-
 //TODO: 
 //Fix gaussian filter function (creates colorful horizontal lines in output image)
 //Add timing tracking for OpenCL implementation and compare speed.
@@ -23,27 +22,75 @@
 #include <omp.h>
 #define MATRIXSIZE 100
 
+// Global variable for checking and storing operation execution times.
 std::chrono::duration<double> opTime;
+
+/**
+* Function for checking OpenCL status for errors and displaying detected:
+* OpenCL platform,
+* Device,
+* Memory type,
+* Memory size,
+* Computing units,
+* Clock frequency,
+* Buffer size,
+* item dimensions,
+* Item sizes
+*/
 
 static void display()
 {
+    cl_platform_id platform;
+    cl_device_id device;
+    cl_int err;
+    cl_device_local_mem_type memType;
+    cl_ulong memSize, constBufSize;
+    cl_uint computeUnits, clockFreq;
+    size_t maxWorkGroupSize, maxWorkItemSizes[3];
+    cl_uint dims;
 
-	cl_platform_id platform;
-	cl_int status = clGetPlatformIDs(1, &platform, NULL);
+    cl_int status = clGetPlatformIDs(1, &platform, NULL);
 
-	if (status != CL_SUCCESS)
-	{
-		printf("Error: Failed to get platform information!");
-		return;
-	}
+    if (status != CL_SUCCESS)
+    {
+        printf("Error: Failed to get platform information!");
+        exit(1);
+    }
 
-	char buffer[1024];
-	clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(buffer), buffer, NULL);
-	printf("Platform name: %s\n", buffer);
+    char buffer[1024];
+    clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(buffer), buffer, NULL);
+    printf("Platform name: %s\n", buffer);
 
-	clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(buffer), buffer, NULL);
-	printf("Platform version: %s\n", buffer);
+    clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(buffer), buffer, NULL);
+    printf("Platform version: %s\n", buffer);
+
+    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+    if (err != CL_SUCCESS) {
+        printf("Error: Failed to get device id!");
+        exit(1);
+    }
+    clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_TYPE, sizeof(memType), &memType, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(memSize), &memSize, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(computeUnits), &computeUnits, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(clockFreq), &clockFreq, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, sizeof(constBufSize), &constBufSize, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroupSize), &maxWorkGroupSize, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(dims), &dims, NULL);
+    clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t) * dims, maxWorkItemSizes, NULL);
+
+    printf("CL_DEVICE_LOCAL_MEM_TYPE: %s\n", memType == CL_LOCAL ? "CL_LOCAL" : memType == CL_GLOBAL ? "CL_GLOBAL" : "Unknown");
+    printf("CL_DEVICE_LOCAL_MEM_SIZE: %llu bytes\n", memSize);
+    printf("CL_DEVICE_MAX_COMPUTE_UNITS: %u\n", computeUnits);
+    printf("CL_DEVICE_MAX_CLOCK_FREQUENCY: %u MHz\n", clockFreq);
+    printf("CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE: %llu bytes\n", constBufSize);
+    printf("CL_DEVICE_MAX_WORK_GROUP_SIZE: %zu\n", maxWorkGroupSize);
+    printf("CL_DEVICE_MAX_WORK_ITEM_SIZES: (%zu, %zu, %zu)\n",
+        maxWorkItemSizes[0], maxWorkItemSizes[1], maxWorkItemSizes[2]);
 }
+/**
+* @brief Performs addition of two matrices
+* @note This function was Was used in the early c++ implementation
+*/
 
 void matrix_add(float *matrix_1, float *matrix_2, float *result, int matrixsize)
 {
@@ -52,7 +99,10 @@ void matrix_add(float *matrix_1, float *matrix_2, float *result, int matrixsize)
 		result[i] = matrix_1[i] + matrix_2[i];
 	}
 }
-
+/**
+* @brief Loads contents of a OpenCL kernel file into a string.
+* @note This function was used in the early implementation phase.
+*/
 
 std::string loadKernelFromFile(std::string filename) {
 
@@ -69,6 +119,18 @@ std::string loadKernelFromFile(std::string filename) {
 
 }
 
+/**
+* @brief Calculates the Zero-Mean Normalized Cross-Correlation (ZNCC) disparity map between two given images.
+ * @param image1: The first input image
+ * @param image2: The second input image
+ * @param imageWidth: The width of the input images
+ * @param imageHeight: The height of the input images
+ * @param windowWidth: The width of the ZNCC window
+ * @param windowHeight: The height of the ZNCC window
+ * @param max_disp: The maximum disparity to search for
+ * @return vector<unsinged char> output: The disparity map
+* @note Used in the early implementation
+*/
 
 std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> image1, std::vector<unsigned char> image2, unsigned int imageWidth, unsigned int imageHeight, int windowWidth, int windowHeight, unsigned int max_disp) {
 
@@ -182,6 +244,17 @@ std::vector<unsigned char> CalcZNCC(std::vector<unsigned char> image1, std::vect
 
 }
 
+/**
+* @brief Multithreaded version of the Zero-Mean Normalized Cross-Correlation function
+ * @param image1: The first input image
+ * @param image2: The second input image
+ * @param width: The width of the input images
+ * @param height: The height of the input images
+ * @param win_size: The size of ZNCC window
+ * @param max_disp: The maximum disparity to search for
+ * @return vector<unsinged char> output: The disparity map
+ * @note used in the early implementation
+*/
 
 std::vector<unsigned char> CalcZNCC_multithreaded(
     const std::vector<unsigned char>& image1,
@@ -286,6 +359,16 @@ std::vector<unsigned char> CalcZNCC_multithreaded(
     return output;
 }
 
+/**
+* @brief Fills zero-valued pixels in the disparity map using a simple neighbourhoodd search
+* The function iterates the given disparity map and if it finds a disparity of 0, 
+* it searches the neighboring pixels to find a non-zero disparity to use for filling the occluded pixel.
+ * @param map: The input disparity map
+ * @param width: The width of the disparity map
+ * @param height: The height of the disparity map
+ * @return vector<unsigned char>: Disparity map with occlusion fill.
+ * @note used in the early implementation
+*/
 std::vector<unsigned char> OcculsionFill(std::vector<unsigned char> map, unsigned int width, unsigned int height) {
 
 	int index;
@@ -334,7 +417,19 @@ std::vector<unsigned char> OcculsionFill(std::vector<unsigned char> map, unsigne
 }
 
 
-
+/**
+* @brief Function performs cross-checkling for two disparity maps to find inconsistant pixels.
+* 
+* This function compares two disparity maps and their corresponding pixels in thee maps.
+* If the difference between the values of the pixels is larger than the given threshold,
+* the pixel is set to 0 in the output map. 
+* 
+* @param map1: First disparity map (Left-to-Right)
+* @param map2: Second disparity map (Right-to-Left)
+* @param threshold: The maximum allowed difference between the values of the disparity values.
+* @return vector<unsigned char> outputMap: Cross-checked disparity map
+* @note used in the early implementation
+*/
 
 
 std::vector<unsigned char> CrossCheck(std::vector<unsigned char> map1, std::vector<unsigned char> map2, unsigned int threshold) {
@@ -354,6 +449,13 @@ std::vector<unsigned char> CrossCheck(std::vector<unsigned char> map1, std::vect
 	return outputMap;
 }
 
+/**
+* @brief Multithreaded version of the OcclusionFill function
+* @param map: The disparity map
+* @param width: Width of the disparity map
+* @param height: Height of the disparity map
+* @return vector<unsigned char> outputMap: Disparity map with occlusion fill. 
+*/
 
 std::vector<unsigned char> OcclusionFillMultithreaded(std::vector<unsigned char> map, unsigned int width, unsigned int height) {
 
@@ -416,6 +518,25 @@ std::vector<unsigned char> OcclusionFillMultithreaded(std::vector<unsigned char>
 }
 
 
+/**
+* @brief Executes the OpenCL kernel to resize the image by 4
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'resizeKernel.cl'
+* Executes the kernel,
+* Reads the resized image's contents back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+* 
+* @param imptr: Pointer to the input image data
+* @param width: Original width of the input image
+* @param height: Original height of the input image
+* @return unsigned char* outputImage: The pointer to a new char array that contains the resized image's data
+*/
 unsigned char * executeResizeKernel(unsigned char * imptr, unsigned width, unsigned height) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -480,7 +601,25 @@ unsigned char * executeResizeKernel(unsigned char * imptr, unsigned width, unsig
 	return outputImage;
 }
 
-
+/**
+* @brief Executes the OpenCL kernel to convert the given image to grayscale
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'grayScaleKernel.cl'
+* Executes the kernel,
+* Reads the grayscaled image's contents back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+* 
+* @param imptr: Pointer to the input image data
+* @param width: Width of the input image
+* @param height: Height of the input image
+* @return unsigned char* outputImage: The pointer to a new char arra that contains the grayscale image's data
+*/
 unsigned char * executeGrayScaleKernel(unsigned char * imptr, unsigned width, unsigned height) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -542,7 +681,25 @@ unsigned char * executeGrayScaleKernel(unsigned char * imptr, unsigned width, un
 	return outputImage;
 }
 
-
+/**
+* @brief Executes the OpenCL kernel to apply gaussian blur filter to the given image.
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'filterKernel.cl'
+* Executes the kernel,
+* Reads the filtered image's contents back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+* 
+* @param imptr: Pointer to the input image data
+* @param width: Width of the input image
+* @param height: Height of the input image
+* @return unsigned char* outputImage: The pointer to a new char arra that contains the filtered image's data
+*/
 unsigned char * executeFilterKernel(unsigned char * imptr, unsigned width, unsigned height) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -604,6 +761,29 @@ unsigned char * executeFilterKernel(unsigned char * imptr, unsigned width, unsig
 	return outputImage;
 }
 
+/**
+* @brief Executes the OpenCL kernel to calculate the Zero-Mean Normalized Cross-Correlation
+* (ZNCC) dispary map between the given two images.
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'znccKernel.cl'
+* Executes the kernel,
+* Reads the disparity map back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+* 
+* @param imptr1: Pointer to the first input image's data
+* @param imptr2: Pointer to the second input image's data
+* @param width: Width of the input images
+* @param height: Height of the input images
+* @param windowSize: The size of the ZNCC window
+* @param max_disp: The maximum disparity to search for
+* @return unsigned char* outputImage: The pointer to a new char array that contains the output disparity map
+*/
 unsigned char * executeZNCCKernel(unsigned char * imptr, unsigned char * imptr2, unsigned width, unsigned height, unsigned windowSize, unsigned max_disp) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -671,6 +851,28 @@ unsigned char * executeZNCCKernel(unsigned char * imptr, unsigned char * imptr2,
 	return outputImage;
 }
 
+/**
+* @brief Executes the OpenCL kernel to perform cross-checking between two given disparity maps
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'XCheckKernel.cl'
+* Executes the kernel,
+* Reads the disparity map back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+* 
+* @param map1: Pointer to the first disparity map data
+* @param map2: Pointer to the second disparity map data
+* @param width: Width of the disparity maps
+* @param height: Height of the disparity maps
+* @param threshold: The maximum allowed difference between the values of the disparity values
+* @return unsigned char* outputMap: The pointer to a new char array containing the cross-checked disparity map
+* 
+*/
 unsigned char * executeXCheckKernel(unsigned char * map1, unsigned char * map2, unsigned width, unsigned height, unsigned threshold) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -737,6 +939,26 @@ unsigned char * executeXCheckKernel(unsigned char * map1, unsigned char * map2, 
 	return outputMap;
 }
 
+/**
+* @brief Executes the OpenCL kernel to fill zero-valued pixels in a given disparity map.
+* 
+* This function:
+* Initialized OpenCL,
+* Creates the context and command queue,
+* Copies image data to the device,
+* Sets the kernel arguments,
+* Loads and compiles 'OccFillKernel.cl'
+* Executes the kernel,
+* Reads the disparity map back to the host,
+* Cleans up the memory after execution,
+* Monitors the execution time
+*
+* @param map: Pointer to the input disparity map data
+* @param width: Width of the disparity map
+* @param height: Height of the disparity map
+* @return unsinged char* outputMap: The pointer to a new char array containing the disparity map with occlusion fill 
+* 
+*/
 unsigned char * executeOccFillKernel(unsigned char * map, unsigned width, unsigned height) {
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -748,7 +970,7 @@ unsigned char * executeOccFillKernel(unsigned char * map, unsigned width, unsign
     
     cl_device_id device;
     clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-
+    
     cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, NULL);
     cl_command_queue queue = clCreateCommandQueue(context, device, 0, NULL);
 
@@ -798,10 +1020,26 @@ unsigned char * executeOccFillKernel(unsigned char * map, unsigned width, unsign
 	return outputMap;
 }
 
+/**
+* @brief Main function that contains the pipeline for executing different OpenCL kernels for image processing
+* The main function first executes display()-function to check for errors and showcasing OpenCl information. 
+* If an error arises during the execution of display()-function, the program exits gracefully.
+* 
+* After executing display()-function, the main function reads and loads images
+" img0.png" and "img1.png". The images should be in the same directory as the main.cpp file,
+* or an IDE should be set up in a way that they can be found and read.
+* Afterwards the main function perforrms a series of image processing by
+* executing the different OpenCL kernels.
+* (resizeKernel.cl, grayScaleKernel.cl, filterKernel.cl, znccKernel.cl, XCheckKernel.cl, and OccFillKernel)
+* 
+* @return 0 if the program exists successfully, non-zero (1) in other cases.
+*/
 
 int main() {
 
     //Main for openCL
+
+    display();
 
 	ImageData inputImage1("im0.png");
 	ImageData inputImage2("im1.png");
@@ -868,5 +1106,3 @@ int main() {
 
 	return 0;
 } */
-
-
